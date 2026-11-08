@@ -1,4 +1,4 @@
-"""Build script to compile MKV to MP4 Converter into a standalone single .exe file."""
+"""Build script to compile MKV to MP4 Converter into a lightweight standalone .exe."""
 
 import os
 import shutil
@@ -6,72 +6,41 @@ import subprocess
 import sys
 from pathlib import Path
 
-from converter.probe import get_ffmpeg_binaries, find_binary
 
-
-def prepare_binaries():
-    """Ensure ffmpeg.exe and ffprobe.exe are in the local ./bin directory for bundling."""
+def build(include_embedded_ffmpeg=False):
     app_root = Path(__file__).resolve().parent
-    bin_dir = app_root / "bin"
-    bin_dir.mkdir(exist_ok=True)
+    assets_dir = app_root / "assets"
+    icon_file = assets_dir / "icon.ico"
 
-    ffmpeg_target = bin_dir / "ffmpeg.exe"
-    ffprobe_target = bin_dir / "ffprobe.exe"
+    if not icon_file.exists():
+        print("[*] Generating icons...")
+        subprocess.run([sys.executable, str(app_root / "scripts" / "generate_logo.py")], check=True)
 
-    if ffmpeg_target.exists() and ffprobe_target.exists():
-        print(f"[OK] FFmpeg binaries already present in {bin_dir}")
-        return str(bin_dir)
-
-    # Search for ffmpeg in PATH or standard installation paths
-    ffmpeg_src = find_binary("ffmpeg")
-    ffprobe_src = find_binary("ffprobe")
-
-    # Also search common winget install paths if not in PATH yet
-    if not ffmpeg_src or not ffprobe_src:
-        local_app_data = os.environ.get("LOCALAPPDATA", "")
-        candidates = list(Path(local_app_data).glob("Microsoft/WinGet/Packages/**/*ffmpeg.exe"))
-        if candidates:
-            ffmpeg_src = str(candidates[0])
-            probe_cand = candidates[0].parent / "ffprobe.exe"
-            if probe_cand.exists():
-                ffprobe_src = str(probe_cand)
-
-    if ffmpeg_src and os.path.exists(ffmpeg_src):
-        print(f"[+] Copying ffmpeg from {ffmpeg_src} -> {ffmpeg_target}")
-        shutil.copy2(ffmpeg_src, ffmpeg_target)
-
-    if ffprobe_src and os.path.exists(ffprobe_src):
-        print(f"[+] Copying ffprobe from {ffprobe_src} -> {ffprobe_target}")
-        shutil.copy2(ffprobe_src, ffprobe_target)
-
-    if not ffmpeg_target.exists() or not ffprobe_target.exists():
-        raise RuntimeError(
-            "Could not locate ffmpeg.exe and ffprobe.exe. Please ensure FFmpeg is installed or place them in ./bin/"
-        )
-
-    return str(bin_dir)
-
-
-def build():
-    app_root = Path(__file__).resolve().parent
-    bin_dir = prepare_binaries()
-
-    ffmpeg_bin = os.path.join(bin_dir, "ffmpeg.exe")
-    ffprobe_bin = os.path.join(bin_dir, "ffprobe.exe")
-
-    print("[*] Starting PyInstaller build...")
+    print(f"[*] Starting PyInstaller build (small_size={not include_embedded_ffmpeg})...")
 
     pyinstaller_cmd = [
         sys.executable,
         "-m", "PyInstaller",
         "--noconsole",
         "--onefile",
+        "--clean",
         "--name", "MKV_to_MP4_Converter",
+        f"--icon={icon_file}",
         "--collect-all", "customtkinter",
-        f"--add-binary={ffmpeg_bin};bin",
-        f"--add-binary={ffprobe_bin};bin",
-        str(app_root / "main.py")
+        f"--add-data={assets_dir};assets",
     ]
+
+    if include_embedded_ffmpeg:
+        bin_dir = app_root / "bin"
+        ffmpeg_bin = bin_dir / "ffmpeg.exe"
+        ffprobe_bin = bin_dir / "ffprobe.exe"
+        if ffmpeg_bin.exists() and ffprobe_bin.exists():
+            pyinstaller_cmd.extend([
+                f"--add-binary={ffmpeg_bin};bin",
+                f"--add-binary={ffprobe_bin};bin",
+            ])
+
+    pyinstaller_cmd.append(str(app_root / "main.py"))
 
     print(f"Executing: {' '.join(pyinstaller_cmd)}")
     result = subprocess.run(pyinstaller_cmd, cwd=str(app_root))
@@ -83,7 +52,7 @@ def build():
     if dist_exe.exists():
         size_mb = dist_exe.stat().st_size / (1024 * 1024)
         print("=" * 60)
-        print(f"[SUCCESS] Standalone executable created successfully!")
+        print(f"[SUCCESS] Standalone small-size executable created successfully!")
         print(f"Location: {dist_exe}")
         print(f"Size: {size_mb:.2f} MB")
         print("=" * 60)
@@ -93,4 +62,4 @@ def build():
 
 
 if __name__ == "__main__":
-    build()
+    build(include_embedded_ffmpeg=False)

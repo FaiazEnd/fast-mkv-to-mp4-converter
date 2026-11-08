@@ -5,9 +5,11 @@ import os
 import shutil
 import subprocess
 import sys
+import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Callable
 
 # Windows flag to prevent console window from popping up
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
@@ -17,6 +19,19 @@ MP4_COMPATIBLE_VIDEO_CODECS = {"h264", "hevc", "av1", "mpeg4"}
 
 # Audio codecs supported for direct copy into MP4
 MP4_COMPATIBLE_AUDIO_CODECS = {"aac", "ac3", "eac3", "mp3", "opus", "flac", "alac"}
+
+FFMPEG_ESSENTIALS_URL = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+
+
+def get_appdata_bin_dir() -> Path:
+    """Return persistent user app data directory for portable binaries."""
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        base = Path(local_app_data) / "MKV_to_MP4_Converter" / "bin"
+    else:
+        base = Path.home() / ".mkv_to_mp4_converter" / "bin"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
 
 
 @dataclass
@@ -50,7 +65,7 @@ class MediaInfo:
 
 
 def find_binary(binary_name: str, search_dir: Optional[str] = None) -> Optional[str]:
-    """Locate a binary in PyInstaller bundle, local bin directory, or system PATH."""
+    """Locate a binary in search dir, PyInstaller bundle, local bin, AppData bin, or PATH."""
     ext = ".exe" if sys.platform == "win32" else ""
     full_name = f"{binary_name}{ext}"
 
@@ -75,7 +90,19 @@ def find_binary(binary_name: str, search_dir: Optional[str] = None) -> Optional[
     if local_cand.exists():
         return str(local_cand.resolve())
 
-    # 4. System PATH
+    # 4. User AppData directory (%LOCALAPPDATA%/MKV_to_MP4_Converter/bin)
+    appdata_cand = get_appdata_bin_dir() / full_name
+    if appdata_cand.exists():
+        return str(appdata_cand.resolve())
+
+    # 5. Check common WinGet install directories
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        winget_cands = list(Path(local_app_data).glob(f"Microsoft/WinGet/Packages/**/{full_name}"))
+        if winget_cands and winget_cands[0].exists():
+            return str(winget_cands[0].resolve())
+
+    # 6. System PATH
     found = shutil.which(binary_name)
     if found:
         return str(Path(found).resolve())
@@ -88,6 +115,59 @@ def get_ffmpeg_binaries() -> tuple[Optional[str], Optional[str]]:
     ffmpeg_path = find_binary("ffmpeg")
     ffprobe_path = find_binary("ffprobe")
     return ffmpeg_path, ffprobe_path
+
+
+def download_ffmpeg_essentials(progress_callback: Optional[Callable[[float, str], None]] = None) -> bool:
+    """Download portable static FFmpeg into user AppData for ultra-small client setup."""
+    target_dir = get_appdata_bin_dir()
+    ffmpeg_target = target_dir / ("ffmpeg.exe" if sys.platform == "win32" else "ffmpeg")
+    ffprobe_target = target_dir / ("ffprobe.exe" if sys.platform == "win32" else "ffprobe")
+
+    if ffmpeg_target.exists() and ffprobe_target.exists():
+        return True
+
+    zip_path = target_dir / "ffmpeg_temp.zip"
+
+    def _report_hook(block_num, block_size, total_size):
+        if total_size > 0 and progress_callback:
+            downloaded = block_num * block_size
+            percent = min(100.0, (downloaded / total_size) * 100.0)
+            progress_callback(percent, f"Downloading FFmpeg engine... {percent:.1f}%")
+
+    try:
+        if progress_callback:
+            progress_callback(0.0, "Connecting to FFmpeg static archive...")
+        urllib.request.urlretrieve(FFMPEG_ESSENTIALS_URL, zip_path, reporthook=_report_hook)
+
+        if progress_callback:
+            progress_callback(95.0, "Extracting binaries...")
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for member in zf.namelist():
+                lower = member.lower()
+                if lower.endswith("ffmpeg.exe") or lower.endswith("bin/ffmpeg"):
+                    with zf.open(member) as source, open(ffmpeg_target, "wb") as target:
+                        shutil.copyfileobj(source, target)
+                elif lower.endswith("ffprobe.exe") or lower.endswith("bin/ffprobe"):
+                    with zf.open(member) as source, open(ffprobe_target, "wb") as target:
+                        shutil.copyfileobj(source, target)
+
+        if zip_path.exists():
+            zip_path.unlink()
+
+        if ffmpeg_target.exists() and ffprobe_target.exists():
+            if progress_callback:
+                progress_callback(100.0, "Ready!")
+            return True
+    except Exception as e:
+        if zip_path.exists():
+            try:
+                zip_path.unlink()
+            except Exception:
+                pass
+        raise RuntimeError(f"Failed to auto-download FFmpeg: {e}") from e
+
+    return False
 
 
 def probe_media(file_path: str, ffprobe_path: Optional[str] = None) -> MediaInfo:
@@ -181,12 +261,10 @@ def probe_media(file_path: str, ffprobe_path: Optional[str] = None) -> MediaInfo
             audio_streams.append(info)
 
     # Check remux compatibility:
-    # Video can be remuxed if primary video codec is supported by MP4
     can_remux_video = False
     if video_streams:
         can_remux_video = video_streams[0].codec_name in MP4_COMPATIBLE_VIDEO_CODECS
 
-    # Audio can be remuxed if all audio streams are supported by MP4
     can_remux_audio = True if audio_streams else False
     for a in audio_streams:
         if a.codec_name not in MP4_COMPATIBLE_AUDIO_CODECS:
