@@ -32,6 +32,20 @@ An ultra-fast, lightweight, and modern Windows desktop application that converts
 
 ---
 
+## 💼 Commercial Acquisition & Offers
+
+This project is released under the open-source **MIT License**, but is actively **open for acquisition inquiries and commercial buyout offers**.
+
+If your organization is interested in:
+- **Full IP & Project Buyout** (Complete ownership transfer of repositories, branding, and domain)
+- **Exclusive Commercial Dual-Licensing** (For embedding in closed-source proprietary software)
+- **Custom White-Label Builds & Enterprise Integration**
+
+Please consult **[ACQUISITION.md](ACQUISITION.md)** or submit formal proposals to:  
+📧 **`fayajassassin@gmail.com`** *(Subject: `[Acquisition Offer] MKV to MP4 Converter Pro - <Company Name>`)*
+
+---
+
 ## Running from Source
 
 ```bash
