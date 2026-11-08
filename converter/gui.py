@@ -1,4 +1,4 @@
-"""Modern desktop GUI for MKV to MP4 Converter using CustomTkinter."""
+"""Modern Fintech / Executive Dashboard styling for MKV to MP4 Converter."""
 
 import os
 import subprocess
@@ -21,277 +21,611 @@ from converter.engine import (
     AUDIO_CODECS,
     AUDIO_BITRATES,
     CRF_PRESETS,
-    SPEED_PRESETS,
 )
 
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
+# Color Palette inspired by the modern sleek dark UI with coral-red & amber highlights
+THEME = {
+    "dark": {
+        "bg": "#16171b",            # Deep slate background
+        "card_bg": "#1f2026",       # Elevated card background
+        "card_sub_bg": "#282a32",   # Inner nested widgets
+        "sidebar_bg": "#1c1d22",    # Right panel background
+        "accent": "#ff4d4d",        # Vibrant coral red
+        "accent_hover": "#e63939",
+        "secondary_accent": "#f5a623", # Amber yellow
+        "text": "#ffffff",
+        "text_sub": "#8f92a1",
+        "border": "#2c2d36",
+        "success": "#2ecc71",
+        "warning": "#f39c12",
+        "danger": "#e74c3c"
+    },
+    "light": {
+        "bg": "#f4f5f9",            # Clean soft light gray
+        "card_bg": "#ffffff",       # Pure white cards
+        "card_sub_bg": "#f0f2f6",   # Inner nested widgets
+        "sidebar_bg": "#eaecef",    # Right panel background
+        "accent": "#ff4d4d",        # Vibrant coral red
+        "accent_hover": "#e63939",
+        "secondary_accent": "#f5a623",
+        "text": "#1a1c22",
+        "text_sub": "#6c7080",
+        "border": "#dbe0ea",
+        "success": "#27ae60",
+        "warning": "#d35400",
+        "danger": "#c0392b"
+    }
+}
 
 
-class MainWindow(ctk.CTk):
-    """Main application window for MKV to MP4 Converter."""
+class ModernDashboardWindow(ctk.CTk):
+    """Sleek, modern Dashboard style UI for media conversion with Light/Dark mode."""
 
     def __init__(self, controller: Optional[ConversionController] = None):
         super().__init__()
         self.controller = controller or ConversionController()
 
-        self.title("MKV to MP4 Converter - Fast, Light & 100% Audio Preserved")
-        self.geometry("980x720")
-        self.minsize(860, 600)
+        self.title("Media Studio Pro • Ultra-Fast MKV to MP4 Converter")
+        self.geometry("1100x740")
+        self.minsize(980, 640)
 
-        # Wire controller callbacks with thread-safe dispatch
+        # Set default appearance mode
+        self.current_mode = "Dark"
+        ctk.set_appearance_mode(self.current_mode)
+        ctk.set_default_color_theme("blue")
+
+        # Configure root window background
+        self.configure(fg_color=("#f4f5f9", "#16171b"))
+
+        # Connect controller callbacks safely to UI thread
         self.controller.on_item_added = lambda item: self.after(0, self._render_queue_item, item)
         self.controller.on_item_updated = lambda item: self.after(0, self._update_queue_item_ui, item)
         self.controller.on_queue_finished = lambda: self.after(0, self._on_queue_finished)
 
         self._item_rows: Dict[str, Dict[str, ctk.CTkBaseClass]] = {}
 
-        self._build_ui()
+        self._build_dashboard_layout()
 
-    def _build_ui(self) -> None:
-        # 1. Header Frame
-        header_frame = ctk.CTkFrame(self, corner_radius=10, fg_color=("gray85", "#1e1e24"))
-        header_frame.pack(fill="x", padx=16, pady=(14, 8))
+    def _build_dashboard_layout(self) -> None:
+        # Main layout: Left Content Area + Right Profile & Quick Stats Sidebar
+        self.main_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_container.pack(fill="both", expand=True, padx=20, pady=20)
 
-        title_label = ctk.CTkLabel(
-            header_frame,
-            text="MKV to MP4 Converter",
-            font=ctk.CTkFont(size=22, weight="bold"),
-        )
-        title_label.pack(side="left", padx=16, pady=12)
+        # ----------------- TOP NAVIGATION BAR -----------------
+        self._build_navbar()
 
-        subtitle_label = ctk.CTkLabel(
-            header_frame,
-            text="Ultra-Fast Remuxing • 100% Lossless Audio Preservation • Multi-Format",
-            font=ctk.CTkFont(size=12),
-            text_color="gray60",
-        )
-        subtitle_label.pack(side="left", padx=8, pady=12)
+        # ----------------- BODY: 2 COLUMNS -----------------
+        self.body_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self.body_frame.pack(fill="both", expand=True, pady=(16, 0))
 
-        # 2. Options / Codec Selectors Bar
-        options_frame = ctk.CTkFrame(self, corner_radius=10, fg_color=("gray90", "#24242d"))
-        options_frame.pack(fill="x", padx=16, pady=6)
+        # Left Column (70% width): Queue & Conversion Hub
+        self.left_col = ctk.CTkFrame(self.body_frame, fg_color="transparent")
+        self.left_col.pack(side="left", fill="both", expand=True, padx=(0, 14))
 
-        # Output Format
-        col1 = ctk.CTkFrame(options_frame, fg_color="transparent")
-        col1.pack(side="left", padx=10, pady=8)
-        ctk.CTkLabel(col1, text="Container Format:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
-        self.format_var = ctk.StringVar(value="MP4 (.mp4)")
-        self.format_dropdown = ctk.CTkOptionMenu(
-            col1,
-            variable=self.format_var,
-            values=list(FORMAT_EXTENSIONS.keys()),
-            command=self._on_options_changed,
-            width=140,
-        )
-        self.format_dropdown.pack(pady=(2, 0))
-
-        # Video Codec
-        col2 = ctk.CTkFrame(options_frame, fg_color="transparent")
-        col2.pack(side="left", padx=10, pady=8)
-        ctk.CTkLabel(col2, text="Video Codec:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
-        self.video_codec_var = ctk.StringVar(value="Copy (100% Lossless, Instant)")
-        self.video_codec_dropdown = ctk.CTkOptionMenu(
-            col2,
-            variable=self.video_codec_var,
-            values=list(VIDEO_CODECS.keys()),
-            command=self._on_options_changed,
-            width=175,
-        )
-        self.video_codec_dropdown.pack(pady=(2, 0))
-
-        # Audio Codec (100% Lossless copy default)
-        col3 = ctk.CTkFrame(options_frame, fg_color="transparent")
-        col3.pack(side="left", padx=10, pady=8)
-        ctk.CTkLabel(col3, text="Audio Codec:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
-        self.audio_codec_var = ctk.StringVar(value="Copy (100% Lossless, Instant)")
-        self.audio_codec_dropdown = ctk.CTkOptionMenu(
-            col3,
-            variable=self.audio_codec_var,
-            values=list(AUDIO_CODECS.keys()),
-            command=self._on_options_changed,
-            width=175,
-        )
-        self.audio_codec_dropdown.pack(pady=(2, 0))
-
-        # Audio Bitrate
-        col4 = ctk.CTkFrame(options_frame, fg_color="transparent")
-        col4.pack(side="left", padx=10, pady=8)
-        ctk.CTkLabel(col4, text="Audio Bitrate:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
-        self.audio_bitrate_var = ctk.StringVar(value="Source / Default")
-        self.audio_bitrate_dropdown = ctk.CTkOptionMenu(
-            col4,
-            variable=self.audio_bitrate_var,
-            values=AUDIO_BITRATES,
-            command=self._on_options_changed,
-            width=120,
-        )
-        self.audio_bitrate_dropdown.pack(pady=(2, 0))
-
-        # Video CRF Quality
-        col5 = ctk.CTkFrame(options_frame, fg_color="transparent")
-        col5.pack(side="left", padx=10, pady=8)
-        ctk.CTkLabel(col5, text="Video CRF Quality:", font=ctk.CTkFont(size=11, weight="bold")).pack(anchor="w")
-        self.crf_var = ctk.StringVar(value="23 (Default Balance)")
-        self.crf_dropdown = ctk.CTkOptionMenu(
-            col5,
-            variable=self.crf_var,
-            values=CRF_PRESETS,
-            command=self._on_options_changed,
-            width=150,
-        )
-        self.crf_dropdown.pack(pady=(2, 0))
-
-        # 3. Queue Action Bar
-        action_bar = ctk.CTkFrame(self, fg_color="transparent")
-        action_bar.pack(fill="x", padx=16, pady=4)
-
-        self.btn_add_files = ctk.CTkButton(
-            action_bar,
-            text="+ Add MKV Files",
-            width=140,
-            command=self._choose_files,
-            font=ctk.CTkFont(weight="bold"),
-        )
-        self.btn_add_files.pack(side="left", padx=(0, 8))
-
-        self.btn_add_folder = ctk.CTkButton(
-            action_bar,
-            text="+ Add Folder",
-            width=120,
-            command=self._choose_folder,
-            fg_color="#3a3f47",
-            hover_color="#4f5661",
-        )
-        self.btn_add_folder.pack(side="left", padx=(0, 8))
-
-        self.btn_clear = ctk.CTkButton(
-            action_bar,
-            text="Clear Queue",
-            width=100,
-            command=self._clear_queue,
-            fg_color="#443333",
-            hover_color="#663333",
-        )
-        self.btn_clear.pack(side="left", padx=(0, 8))
-
-        self.btn_out_dir = ctk.CTkButton(
-            action_bar,
-            text="Output Folder: Same as Source",
-            command=self._choose_output_dir,
-            fg_color="transparent",
+        # Right Column (30% width): Studio Engine Settings & Stats Panel
+        self.right_col = ctk.CTkFrame(
+            self.body_frame,
+            width=320,
+            corner_radius=18,
+            fg_color=("#ffffff", "#1f2026"),
             border_width=1,
-            text_color=("gray20", "gray80"),
+            border_color=("#e2e5ec", "#2a2b34")
         )
-        self.btn_out_dir.pack(side="right")
+        self.right_col.pack(side="right", fill="y", padx=(0, 0))
+        self.right_col.pack_propagate(False)
 
-        # 4. Scrollable Queue List
-        queue_container = ctk.CTkFrame(self, corner_radius=10, fg_color=("gray95", "#18181f"))
-        queue_container.pack(fill="both", expand=True, padx=16, pady=6)
+        # Build Left Section Components
+        self._build_metric_cards()
+        self._build_queue_section()
+        self._build_active_conversion_card()
 
-        queue_header = ctk.CTkFrame(queue_container, height=28, fg_color=("gray85", "#22222b"))
-        queue_header.pack(fill="x", padx=4, pady=(4, 2))
+        # Build Right Section Components
+        self._build_sidebar()
 
-        ctk.CTkLabel(queue_header, text="File Name", font=ctk.CTkFont(weight="bold", size=11)).pack(side="left", padx=12)
-        ctk.CTkLabel(queue_header, text="Size", font=ctk.CTkFont(weight="bold", size=11)).pack(side="left", padx=160)
-        ctk.CTkLabel(queue_header, text="Detected Codecs", font=ctk.CTkFont(weight="bold", size=11)).pack(side="left", padx=20)
-        ctk.CTkLabel(queue_header, text="Status & Progress", font=ctk.CTkFont(weight="bold", size=11)).pack(side="right", padx=30)
+    def _build_navbar(self) -> None:
+        """Top bar with Brand pill, navigation items, and Theme toggle switch."""
+        navbar = ctk.CTkFrame(self.main_container, height=52, fg_color="transparent")
+        navbar.pack(fill="x")
 
-        self.queue_scroll = ctk.CTkScrollableFrame(queue_container, fg_color="transparent")
-        self.queue_scroll.pack(fill="both", expand=True, padx=4, pady=2)
+        # Brand Icon Badge (Red/White badge style from inspiration image)
+        brand_icon = ctk.CTkButton(
+            navbar,
+            text="●",
+            width=38,
+            height=38,
+            corner_radius=19,
+            fg_color="#ff4d4d",
+            hover_color="#e63939",
+            text_color="#ffffff",
+            font=ctk.CTkFont(size=20, weight="bold"),
+            command=None
+        )
+        brand_icon.pack(side="left", padx=(0, 12))
+
+        title_lbl = ctk.CTkLabel(
+            navbar,
+            text="Media Studio",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=("#1a1c22", "#ffffff")
+        )
+        title_lbl.pack(side="left", padx=(0, 20))
+
+        # Nav links
+        nav_dashboard = ctk.CTkLabel(
+            navbar,
+            text="Dashboard",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#ff4d4d"
+        )
+        nav_dashboard.pack(side="left", padx=12)
+
+        nav_queue = ctk.CTkLabel(
+            navbar,
+            text="Conversion Queue",
+            font=ctk.CTkFont(size=13),
+            text_color=("#6c7080", "#8f92a1")
+        )
+        nav_queue.pack(side="left", padx=12)
+
+        # Right side of navbar: Theme Switch (Light/Dark) & Mode badge
+        self.theme_switch = ctk.CTkSwitch(
+            navbar,
+            text="Dark Mode",
+            command=self._toggle_theme,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            progress_color="#ff4d4d",
+            switch_width=44,
+            switch_height=22
+        )
+        self.theme_switch.select()
+        self.theme_switch.pack(side="right", padx=(10, 0))
+
+    def _toggle_theme(self) -> None:
+        if self.theme_switch.get() == 1:
+            self.current_mode = "Dark"
+            ctk.set_appearance_mode("Dark")
+            self.theme_switch.configure(text="Dark Mode")
+        else:
+            self.current_mode = "Light"
+            ctk.set_appearance_mode("Light")
+            self.theme_switch.configure(text="Light Mode")
+
+    def _build_metric_cards(self) -> None:
+        """Top row of stat summary cards (Files in Queue, Processed, Audio Mode)."""
+        metrics_row = ctk.CTkFrame(self.left_col, fg_color="transparent")
+        metrics_row.pack(fill="x", pady=(0, 12))
+
+        # Card 1: Lossless Audio Mode Badge
+        c1 = ctk.CTkFrame(
+            metrics_row,
+            corner_radius=16,
+            fg_color=("#ffffff", "#1f2026"),
+            border_width=1,
+            border_color=("#e2e5ec", "#2a2b34")
+        )
+        c1.pack(side="left", fill="both", expand=True, padx=(0, 8))
+
+        ctk.CTkLabel(
+            c1,
+            text="AUDIO PRESERVATION",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=("#ff4d4d", "#ff4d4d")
+        ).pack(anchor="w", padx=16, pady=(12, 2))
+
+        ctk.CTkLabel(
+            c1,
+            text="100% Bit-for-Bit",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=("#1a1c22", "#ffffff")
+        ).pack(anchor="w", padx=16)
+
+        ctk.CTkLabel(
+            c1,
+            text="Stream Copy • Zero generation loss",
+            font=ctk.CTkFont(size=11),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(anchor="w", padx=16, pady=(2, 12))
+
+        # Card 2: Queue Metrics
+        c2 = ctk.CTkFrame(
+            metrics_row,
+            corner_radius=16,
+            fg_color=("#ffffff", "#1f2026"),
+            border_width=1,
+            border_color=("#e2e5ec", "#2a2b34")
+        )
+        c2.pack(side="left", fill="both", expand=True, padx=(0, 8))
+
+        ctk.CTkLabel(
+            c2,
+            text="CONVERSION STATUS",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=("#f5a623", "#f5a623")
+        ).pack(anchor="w", padx=16, pady=(12, 2))
+
+        self.stat_queue_lbl = ctk.CTkLabel(
+            c2,
+            text="0 / 0 Completed",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=("#1a1c22", "#ffffff")
+        )
+        self.stat_queue_lbl.pack(anchor="w", padx=16)
+
+        self.stat_sub_lbl = ctk.CTkLabel(
+            c2,
+            text="Queue is waiting for videos",
+            font=ctk.CTkFont(size=11),
+            text_color=("#6c7080", "#8f92a1")
+        )
+        self.stat_sub_lbl.pack(anchor="w", padx=16, pady=(2, 12))
+
+        # Card 3: Instant Remux Engine Indicator
+        c3 = ctk.CTkFrame(
+            metrics_row,
+            corner_radius=16,
+            fg_color=("#ffffff", "#1f2026"),
+            border_width=1,
+            border_color=("#e2e5ec", "#2a2b34")
+        )
+        c3.pack(side="left", fill="both", expand=True)
+
+        ctk.CTkLabel(
+            c3,
+            text="ENGINE MODE",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=("#2ecc71", "#2ecc71")
+        ).pack(anchor="w", padx=16, pady=(12, 2))
+
+        self.stat_engine_lbl = ctk.CTkLabel(
+            c3,
+            text="Ultra-Fast Remux",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=("#1a1c22", "#ffffff")
+        )
+        self.stat_engine_lbl.pack(anchor="w", padx=16)
+
+        ctk.CTkLabel(
+            c3,
+            text="Direct Stream Copy Enabled",
+            font=ctk.CTkFont(size=11),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(anchor="w", padx=16, pady=(2, 12))
+
+    def _build_queue_section(self) -> None:
+        """Card containing the file list with modern clean typography and action bar."""
+        self.queue_card = ctk.CTkFrame(
+            self.left_col,
+            corner_radius=16,
+            fg_color=("#ffffff", "#1f2026"),
+            border_width=1,
+            border_color=("#e2e5ec", "#2a2b34")
+        )
+        self.queue_card.pack(fill="both", expand=True, pady=(0, 12))
+
+        # Card Header with Action Buttons
+        card_header = ctk.CTkFrame(self.queue_card, fg_color="transparent", height=42)
+        card_header.pack(fill="x", padx=18, pady=(14, 8))
+
+        ctk.CTkLabel(
+            card_header,
+            text="Task Queue",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=("#1a1c22", "#ffffff")
+        ).pack(side="left")
+
+        # Action Buttons on top right
+        btn_clear = ctk.CTkButton(
+            card_header,
+            text="Clear",
+            width=70,
+            height=30,
+            corner_radius=8,
+            fg_color=("#f0f2f6", "#2a2b34"),
+            hover_color=("#e2e5ec", "#353742"),
+            text_color=("#6c7080", "#8f92a1"),
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._clear_queue
+        )
+        btn_clear.pack(side="right", padx=(6, 0))
+
+        btn_folder = ctk.CTkButton(
+            card_header,
+            text="+ Add Folder",
+            width=100,
+            height=30,
+            corner_radius=8,
+            fg_color=("#f0f2f6", "#2a2b34"),
+            hover_color=("#e2e5ec", "#353742"),
+            text_color=("#1a1c22", "#ffffff"),
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._choose_folder
+        )
+        btn_folder.pack(side="right", padx=(6, 0))
+
+        btn_files = ctk.CTkButton(
+            card_header,
+            text="+ Add MKV Files",
+            width=120,
+            height=30,
+            corner_radius=8,
+            fg_color="#ff4d4d",
+            hover_color="#e63939",
+            text_color="#ffffff",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._choose_files
+        )
+        btn_files.pack(side="right")
+
+        # Table Column Header
+        col_header = ctk.CTkFrame(self.queue_card, height=26, fg_color=("#f8f9fb", "#18191f"), corner_radius=8)
+        col_header.pack(fill="x", padx=16, pady=(0, 6))
+
+        ctk.CTkLabel(
+            col_header,
+            text="FILE NAME",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(side="left", padx=16)
+
+        ctk.CTkLabel(
+            col_header,
+            text="STATUS",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(side="right", padx=24)
+
+        ctk.CTkLabel(
+            col_header,
+            text="CODECS",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(side="right", padx=60)
+
+        # Scrollable Task List
+        self.queue_scroll = ctk.CTkScrollableFrame(self.queue_card, fg_color="transparent")
+        self.queue_scroll.pack(fill="both", expand=True, padx=12, pady=(0, 12))
 
         self.empty_label = ctk.CTkLabel(
             self.queue_scroll,
-            text="No files added yet.\nClick '+ Add MKV Files' or '+ Add Folder' to begin.",
-            font=ctk.CTkFont(size=14),
-            text_color="gray50",
+            text="No files added yet.\nClick '+ Add MKV Files' or '+ Add Folder' to begin your conversions.",
+            font=ctk.CTkFont(size=13),
+            text_color=("#8f92a1", "#6c7080")
         )
-        self.empty_label.pack(pady=60)
+        self.empty_label.pack(pady=50)
 
-        # 5. Active Conversion Card with Progress Bar
-        self.active_card = ctk.CTkFrame(self, corner_radius=10, fg_color=("gray85", "#1c1c24"))
-        self.active_card.pack(fill="x", padx=16, pady=6)
+    def _build_active_conversion_card(self) -> None:
+        """Card at the bottom showing active conversion, smooth progress bar, and metrics."""
+        self.active_card = ctk.CTkFrame(
+            self.left_col,
+            corner_radius=16,
+            fg_color=("#ffffff", "#1f2026"),
+            border_width=1,
+            border_color=("#e2e5ec", "#2a2b34")
+        )
+        self.active_card.pack(fill="x")
 
-        card_top = ctk.CTkFrame(self.active_card, fg_color="transparent")
-        card_top.pack(fill="x", padx=16, pady=(10, 4))
+        top_info = ctk.CTkFrame(self.active_card, fg_color="transparent")
+        top_info.pack(fill="x", padx=18, pady=(14, 6))
 
         self.current_file_label = ctk.CTkLabel(
-            card_top,
-            text="Ready to convert",
-            font=ctk.CTkFont(size=13, weight="bold"),
+            top_info,
+            text="Standby",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=("#1a1c22", "#ffffff")
         )
         self.current_file_label.pack(side="left")
 
         self.metrics_label = ctk.CTkLabel(
-            card_top,
-            text="Progress: 0.0%  |  Speed: --  |  Elapsed: 00:00  |  ETA: --:--",
-            font=ctk.CTkFont(size=12),
-            text_color="gray70",
+            top_info,
+            text="0.0%  •  Speed: --  •  ETA: --:--",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=("#ff4d4d", "#ff4d4d")
         )
         self.metrics_label.pack(side="right")
 
-        # Smooth Progress Bar for Current Conversion
-        self.progress_bar = ctk.CTkProgressBar(self.active_card, height=14, corner_radius=7)
+        # Sleek Coral Progress Bar
+        self.progress_bar = ctk.CTkProgressBar(
+            self.active_card,
+            height=10,
+            corner_radius=5,
+            progress_color="#ff4d4d",
+            fg_color=("#f0f2f6", "#2a2b34")
+        )
         self.progress_bar.set(0.0)
-        self.progress_bar.pack(fill="x", padx=16, pady=(2, 8))
+        self.progress_bar.pack(fill="x", padx=18, pady=(0, 14))
 
-        # Overall Queue Progress
-        card_bottom = ctk.CTkFrame(self.active_card, fg_color="transparent")
-        card_bottom.pack(fill="x", padx=16, pady=(0, 8))
+    def _build_sidebar(self) -> None:
+        """Right Studio Panel: Codec controls, format options, and primary Start button."""
+        sidebar_content = ctk.CTkFrame(self.right_col, fg_color="transparent")
+        sidebar_content.pack(fill="both", expand=True, padx=20, pady=20)
 
-        self.queue_summary_label = ctk.CTkLabel(
-            card_bottom,
-            text="Queue: 0 files",
-            font=ctk.CTkFont(size=11),
-            text_color="gray60",
+        # Header Profile / Studio Badge (James Martinia style in screenshot)
+        studio_badge = ctk.CTkFrame(
+            sidebar_content,
+            corner_radius=14,
+            fg_color=("#f8f9fb", "#282a32"),
+            border_width=1,
+            border_color=("#e2e5ec", "#33353f")
         )
-        self.queue_summary_label.pack(side="left")
+        studio_badge.pack(fill="x", pady=(0, 16))
 
-        self.overall_progress_bar = ctk.CTkProgressBar(card_bottom, height=8, width=250, corner_radius=4)
-        self.overall_progress_bar.set(0.0)
-        self.overall_progress_bar.pack(side="right")
+        ctk.CTkLabel(
+            studio_badge,
+            text="CONVERSION SETTINGS",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color="#ff4d4d"
+        ).pack(anchor="w", padx=14, pady=(10, 2))
 
-        # 6. Bottom Controls
-        bottom_bar = ctk.CTkFrame(self, fg_color="transparent")
-        bottom_bar.pack(fill="x", padx=16, pady=(6, 12))
-
-        self.btn_start = ctk.CTkButton(
-            bottom_bar,
-            text="Start Conversion",
+        ctk.CTkLabel(
+            studio_badge,
+            text="Studio Engine Control",
             font=ctk.CTkFont(size=14, weight="bold"),
-            height=40,
-            width=180,
-            command=self._start_conversion,
-            fg_color="#1f77d0",
-            hover_color="#185fa7",
+            text_color=("#1a1c22", "#ffffff")
+        ).pack(anchor="w", padx=14, pady=(0, 10))
+
+        # Format Selector
+        ctk.CTkLabel(
+            sidebar_content,
+            text="Output Container Format",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(anchor="w", pady=(4, 2))
+
+        self.format_var = ctk.StringVar(value="MP4 (.mp4)")
+        self.format_dropdown = ctk.CTkOptionMenu(
+            sidebar_content,
+            variable=self.format_var,
+            values=list(FORMAT_EXTENSIONS.keys()),
+            command=self._on_options_changed,
+            fg_color=("#f0f2f6", "#282a32"),
+            button_color="#ff4d4d",
+            button_hover_color="#e63939",
+            text_color=("#1a1c22", "#ffffff"),
+            dropdown_fg_color=("#ffffff", "#282a32"),
+            dropdown_text_color=("#1a1c22", "#ffffff"),
+            corner_radius=8,
+            height=34
         )
-        self.btn_start.pack(side="left", padx=(0, 10))
+        self.format_dropdown.pack(fill="x", pady=(0, 10))
+
+        # Video Codec Selector
+        ctk.CTkLabel(
+            sidebar_content,
+            text="Video Codec",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(anchor="w", pady=(4, 2))
+
+        self.video_codec_var = ctk.StringVar(value="Copy (100% Lossless, Instant)")
+        self.video_codec_dropdown = ctk.CTkOptionMenu(
+            sidebar_content,
+            variable=self.video_codec_var,
+            values=list(VIDEO_CODECS.keys()),
+            command=self._on_options_changed,
+            fg_color=("#f0f2f6", "#282a32"),
+            button_color="#ff4d4d",
+            button_hover_color="#e63939",
+            text_color=("#1a1c22", "#ffffff"),
+            dropdown_fg_color=("#ffffff", "#282a32"),
+            dropdown_text_color=("#1a1c22", "#ffffff"),
+            corner_radius=8,
+            height=34
+        )
+        self.video_codec_dropdown.pack(fill="x", pady=(0, 10))
+
+        # Audio Codec Selector (100% Lossless copy default)
+        ctk.CTkLabel(
+            sidebar_content,
+            text="Audio Codec (Preservation)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(anchor="w", pady=(4, 2))
+
+        self.audio_codec_var = ctk.StringVar(value="Copy (100% Lossless, Instant)")
+        self.audio_codec_dropdown = ctk.CTkOptionMenu(
+            sidebar_content,
+            variable=self.audio_codec_var,
+            values=list(AUDIO_CODECS.keys()),
+            command=self._on_options_changed,
+            fg_color=("#f0f2f6", "#282a32"),
+            button_color="#ff4d4d",
+            button_hover_color="#e63939",
+            text_color=("#1a1c22", "#ffffff"),
+            dropdown_fg_color=("#ffffff", "#282a32"),
+            dropdown_text_color=("#1a1c22", "#ffffff"),
+            corner_radius=8,
+            height=34
+        )
+        self.audio_codec_dropdown.pack(fill="x", pady=(0, 10))
+
+        # Audio Bitrate
+        ctk.CTkLabel(
+            sidebar_content,
+            text="Audio Bitrate (If Re-encoding)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(anchor="w", pady=(4, 2))
+
+        self.audio_bitrate_var = ctk.StringVar(value="Source / Default")
+        self.audio_bitrate_dropdown = ctk.CTkOptionMenu(
+            sidebar_content,
+            variable=self.audio_bitrate_var,
+            values=AUDIO_BITRATES,
+            command=self._on_options_changed,
+            fg_color=("#f0f2f6", "#282a32"),
+            button_color="#ff4d4d",
+            button_hover_color="#e63939",
+            text_color=("#1a1c22", "#ffffff"),
+            dropdown_fg_color=("#ffffff", "#282a32"),
+            dropdown_text_color=("#1a1c22", "#ffffff"),
+            corner_radius=8,
+            height=34
+        )
+        self.audio_bitrate_dropdown.pack(fill="x", pady=(0, 10))
+
+        # Destination Folder Selector Button
+        ctk.CTkLabel(
+            sidebar_content,
+            text="Output Destination",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#6c7080", "#8f92a1")
+        ).pack(anchor="w", pady=(4, 2))
+
+        self.btn_out_dir = ctk.CTkButton(
+            sidebar_content,
+            text="📁 Same as Source",
+            command=self._choose_output_dir,
+            fg_color=("#f0f2f6", "#282a32"),
+            hover_color=("#e2e5ec", "#353742"),
+            text_color=("#1a1c22", "#ffffff"),
+            corner_radius=8,
+            height=34
+        )
+        self.btn_out_dir.pack(fill="x", pady=(0, 16))
+
+        # Bottom Action Buttons
+        self.btn_start = ctk.CTkButton(
+            sidebar_content,
+            text="▶  Start Converting",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            height=44,
+            corner_radius=10,
+            command=self._start_conversion,
+            fg_color="#ff4d4d",
+            hover_color="#e63939",
+            text_color="#ffffff"
+        )
+        self.btn_start.pack(fill="x", pady=(4, 8))
 
         self.btn_cancel = ctk.CTkButton(
-            bottom_bar,
-            text="Cancel Current",
-            height=40,
-            width=130,
+            sidebar_content,
+            text="⏹  Cancel Current",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=36,
+            corner_radius=10,
             command=self._cancel_current,
-            fg_color="#6e2d2d",
-            hover_color="#8b3939",
-            state="disabled",
+            fg_color=("#f0f2f6", "#282a32"),
+            hover_color=("#e2e5ec", "#353742"),
+            text_color=("#6c7080", "#8f92a1"),
+            state="disabled"
         )
-        self.btn_cancel.pack(side="left", padx=(0, 10))
+        self.btn_cancel.pack(fill="x", pady=(0, 8))
 
         self.btn_open_folder = ctk.CTkButton(
-            bottom_bar,
-            text="Open Output Folder",
-            height=40,
-            width=150,
+            sidebar_content,
+            text="📂 Open Output Folder",
+            font=ctk.CTkFont(size=12),
+            height=34,
+            corner_radius=10,
             command=self._open_output_folder,
-            fg_color="#2b313a",
-            hover_color="#3e4652",
+            fg_color="transparent",
+            hover_color=("#f0f2f6", "#282a32"),
+            text_color=("#6c7080", "#8f92a1")
         )
-        self.btn_open_folder.pack(side="right")
+        self.btn_open_folder.pack(fill="x")
 
     def _on_options_changed(self, *_) -> None:
-        """Sync GUI dropdown values into controller."""
+        """Sync dropdown values into controller."""
         self.controller.target_format_label = self.format_var.get()
         self.controller.video_codec = VIDEO_CODECS.get(self.video_codec_var.get(), "copy")
         self.controller.audio_codec = AUDIO_CODECS.get(self.audio_codec_var.get(), "copy")
@@ -299,13 +633,10 @@ class MainWindow(ctk.CTk):
         bitrate = self.audio_bitrate_var.get()
         self.controller.audio_bitrate = None if bitrate.startswith("Source") else bitrate
 
-        crf_choice = self.crf_var.get()
-        if "18" in crf_choice:
-            self.controller.video_crf = 18
-        elif "28" in crf_choice:
-            self.controller.video_crf = 28
+        if self.controller.video_codec == "copy":
+            self.stat_engine_lbl.configure(text="Ultra-Fast Remux")
         else:
-            self.controller.video_crf = 23
+            self.stat_engine_lbl.configure(text="Encoding Active")
 
     def _choose_files(self) -> None:
         paths = filedialog.askopenfilenames(
@@ -331,10 +662,10 @@ class MainWindow(ctk.CTk):
         if folder:
             self.controller.output_directory = folder
             disp = Path(folder).name or folder
-            self.btn_out_dir.configure(text=f"Output: {disp}")
+            self.btn_out_dir.configure(text=f"📁 {disp}")
         else:
             self.controller.output_directory = None
-            self.btn_out_dir.configure(text="Output Folder: Same as Source")
+            self.btn_out_dir.configure(text="📁 Same as Source")
 
     def _clear_queue(self) -> None:
         self.controller.clear_all()
@@ -343,37 +674,53 @@ class MainWindow(ctk.CTk):
                 if isinstance(widget, ctk.CTkBaseClass):
                     widget.destroy()
         self._item_rows.clear()
-        self.empty_label.pack(pady=60)
+        self.empty_label.pack(pady=50)
         self.progress_bar.set(0.0)
-        self.overall_progress_bar.set(0.0)
-        self.current_file_label.configure(text="Ready to convert")
-        self.metrics_label.configure(text="Progress: 0.0%  |  Speed: --  |  Elapsed: 00:00  |  ETA: --:--")
+        self.current_file_label.configure(text="Standby")
+        self.metrics_label.configure(text="0.0%  •  Speed: --  •  ETA: --:--")
         self._update_queue_summary()
 
     def _render_queue_item(self, item: QueueItem) -> None:
         self.empty_label.pack_forget()
 
-        row_frame = ctk.CTkFrame(self.queue_scroll, height=36, fg_color=("gray90", "#21212b"))
-        row_frame.pack(fill="x", pady=2)
+        row_frame = ctk.CTkFrame(
+            self.queue_scroll,
+            height=44,
+            corner_radius=10,
+            fg_color=("#f8f9fb", "#282a32")
+        )
+        row_frame.pack(fill="x", pady=3)
+
+        # File name and size
+        info_frame = ctk.CTkFrame(row_frame, fg_color="transparent")
+        info_frame.pack(side="left", padx=14, pady=6)
 
         name_label = ctk.CTkLabel(
-            row_frame,
+            info_frame,
             text=item.filename,
             font=ctk.CTkFont(size=12, weight="bold"),
-            anchor="w",
-            width=250,
+            text_color=("#1a1c22", "#ffffff"),
+            anchor="w"
         )
-        name_label.pack(side="left", padx=10)
+        name_label.pack(anchor="w")
 
         size_label = ctk.CTkLabel(
-            row_frame,
+            info_frame,
             text=item.file_size_str,
-            font=ctk.CTkFont(size=11),
-            text_color="gray60",
-            width=80,
-            anchor="w",
+            font=ctk.CTkFont(size=10),
+            text_color=("#6c7080", "#8f92a1"),
+            anchor="w"
         )
-        size_label.pack(side="left", padx=10)
+        size_label.pack(anchor="w")
+
+        # Status badge on the right
+        status_label = ctk.CTkLabel(
+            row_frame,
+            text=item.status.value,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#6c7080", "#8f92a1")
+        )
+        status_label.pack(side="right", padx=18)
 
         # Codec badge
         codec_text = "Probing..."
@@ -382,25 +729,15 @@ class MainWindow(ctk.CTk):
             a_codec = item.media_info.primary_audio_codec.upper()
             codec_text = f"{v_codec} / {a_codec}"
             if item.media_info.can_remux_video and item.media_info.can_remux_audio:
-                codec_text += " (Lossless Remux)"
+                codec_text += " • Lossless"
+
         codec_label = ctk.CTkLabel(
             row_frame,
             text=codec_text,
             font=ctk.CTkFont(size=11),
-            text_color="#5cb85c" if "Lossless" in codec_text else "gray70",
-            width=180,
-            anchor="w",
+            text_color="#2ecc71" if "Lossless" in codec_text else ("#6c7080", "#8f92a1")
         )
-        codec_label.pack(side="left", padx=10)
-
-        status_label = ctk.CTkLabel(
-            row_frame,
-            text=item.status.value,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            width=120,
-            anchor="e",
-        )
-        status_label.pack(side="right", padx=12)
+        codec_label.pack(side="right", padx=30)
 
         self._item_rows[item.id] = {
             "frame": row_frame,
@@ -413,20 +750,20 @@ class MainWindow(ctk.CTk):
         if item.id in self._item_rows:
             status_label = self._item_rows[item.id]["status"]
             if item.status == QueueItemStatus.CONVERTING:
-                status_label.configure(text=f"{item.progress:.1f}%", text_color="#1f77d0")
+                status_label.configure(text=f"{item.progress:.1f}%", text_color="#ff4d4d")
             elif item.status == QueueItemStatus.COMPLETED:
-                status_label.configure(text="Completed", text_color="#5cb85c")
+                status_label.configure(text="✓ Done", text_color="#2ecc71")
             elif item.status == QueueItemStatus.FAILED:
-                status_label.configure(text="Failed", text_color="#d9534f")
+                status_label.configure(text="✕ Failed", text_color="#e74c3c")
             elif item.status == QueueItemStatus.CANCELLED:
-                status_label.configure(text="Cancelled", text_color="#f0ad4e")
+                status_label.configure(text="Cancelled", text_color="#f39c12")
 
         if item.status == QueueItemStatus.CONVERTING:
             self.current_file_label.configure(text=f"Converting: {item.filename}")
             mins = int(item.elapsed_sec // 60)
             secs = int(item.elapsed_sec % 60)
             self.metrics_label.configure(
-                text=f"Progress: {item.progress:.1f}%  |  Speed: {item.speed}  |  Elapsed: {mins:02d}:{secs:02d}  |  ETA: {item.eta}"
+                text=f"{item.progress:.1f}%  •  Speed: {item.speed}  •  Elapsed: {mins:02d}:{secs:02d}  •  ETA: {item.eta}"
             )
             self.progress_bar.set(item.progress / 100.0)
 
@@ -435,11 +772,11 @@ class MainWindow(ctk.CTk):
     def _update_queue_summary(self) -> None:
         total = self.controller.queue_length
         completed = self.controller.completed_count
-        self.queue_summary_label.configure(text=f"Queue: {completed} / {total} converted")
+        self.stat_queue_lbl.configure(text=f"{completed} / {total} Completed")
         if total > 0:
-            self.overall_progress_bar.set(completed / float(total))
+            self.stat_sub_lbl.configure(text=f"{total - completed} pending tasks in queue")
         else:
-            self.overall_progress_bar.set(0.0)
+            self.stat_sub_lbl.configure(text="Queue is waiting for videos")
 
     def _start_conversion(self) -> None:
         if self.controller.queue_length == 0:
@@ -465,7 +802,6 @@ class MainWindow(ctk.CTk):
     def _open_output_folder(self) -> None:
         out_dir = self.controller.output_directory
         if not out_dir:
-            # Default to destination of first queue item or current directory
             if self.controller.queue:
                 out_dir = str(Path(self.controller.queue[0].output_path).parent)
             else:
@@ -478,8 +814,12 @@ class MainWindow(ctk.CTk):
                 subprocess.Popen(["xdg-open", out_dir])
 
 
+# Keep MainWindow alias for compatibility
+MainWindow = ModernDashboardWindow
+
+
 def main():
-    app = MainWindow()
+    app = ModernDashboardWindow()
     app.mainloop()
 
 
