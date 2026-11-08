@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://faiazend.github.io/mkv-to-mp4-converter-releases/sitemap.xml
