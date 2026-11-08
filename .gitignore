@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.spec
+build/
+dist/
+.pytest_cache/
+bin/*.exe
+bin/*.zip
+*.mp4
+*.mkv
